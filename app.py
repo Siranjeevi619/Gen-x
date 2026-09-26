@@ -17,12 +17,7 @@ model = ChatGroq(model='openai/gpt-oss-20b', temperature=0.7, api_key=groq_api_k
 
 st.title("GEX")
 
-isclear = st.button("clear state")
-
-if isclear:
-    st.session_state.clear()
-    st.rerun()
-
+isclear = st.button("clear state")    
 
 prompt = ChatPromptTemplate.from_messages([
     ("system",
@@ -41,6 +36,11 @@ history = RedisChatMessageHistory(
     session_id = st.session_state.session_id,
     redis_url="redis://localhost:6379"
 )
+
+if isclear:
+    st.session_state.clear()
+    history.clear()
+
 
 for message in history.messages:
 
