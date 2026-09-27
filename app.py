@@ -66,25 +66,27 @@ for message in history.messages:
     if isinstance(message, AIMessage):
         st.chat_message('assistant').write(message.content)
 
+@st.cache_resource
+def get_retriever():
+    """Load PDF, create embeddings, and return retriever - cached across reruns."""
+    loader = PyPDFLoader('resources/pdfs/attention.pdf')
+    document = loader.load()
 
-loader = PyPDFLoader('resources/pdfs/attention.pdf')
-document = loader.load()
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    chunks = text_splitter.split_documents(documents=document)
 
-text_splitter = RecursiveCharacterTextSplitter(chunk_size = 500, chunk_overlap = 50)
-chunks = text_splitter.split_documents(documents=document)
+    embedding = HuggingFaceEmbeddings(
+        model_name = embedding_model
+    )
 
-embedding = HuggingFaceEmbeddings(
-    model_name = embedding_model
-)
+    vector_store = Chroma.from_documents(
+        embedding=embedding, 
+        documents=chunks
+    )
 
-vector_store = Chroma.from_documents(
-    embedding=embedding, 
-    documents=chunks
-)
+    return vector_store.as_retriever(search_kwargs={"k": 3})
 
-retriever = vector_store.as_retriever(
-    search_kwargs = {"k":3}
-)
+retriever = get_retriever()
 
 
 input = st.chat_input("input")
@@ -98,17 +100,17 @@ if input:
 
     relevant_docs = retriever.invoke(input)
 
-    content_from_docs = "/n/n".join(
-        docs.page_content for docs in relevant_docs 
-    )
+    content_from_docs = "\n\n".join(
+        doc.page_content for doc in relevant_docs
+    )   
 
     print(content_from_docs)
 
     with st.chat_message('assistant'):
         response = st.write_stream(
             chain.stream({
-                "context":content_from_docs,
-                "message":history.messages
+                "context": content_from_docs,
+                "message": history.messages
             })
         )
     
