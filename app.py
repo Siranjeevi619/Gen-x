@@ -2,14 +2,15 @@ import os
 
 import streamlit as st
 from dotenv import load_dotenv
+from langchain_chroma import Chroma
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_redis import RedisChatMessageHistory
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
 
 load_dotenv()
 
@@ -25,7 +26,17 @@ isclear = st.button("clear state")
 
 prompt = ChatPromptTemplate.from_messages([
     ("system",
-    "You are a helpful programming tutor Gex. Explain technical concepts simply and give examples. If user asked about any different topics like cooking, movies and other things. just reply like you can help with only about Technology"),
+    """You are a helpful programming tutor named Gex.
+        Explain technical concepts simply and give examples.
+
+        Use the provided context to answer questions about the document.
+
+        If the answer cannot be found in the context, say that you
+        could not find the answer in the provided document.
+
+        Context:
+        {context}
+        """),
     ("placeholder","{message}")
 ])
 
@@ -44,6 +55,7 @@ history = RedisChatMessageHistory(
 if isclear:
     st.session_state.clear()
     history.clear()
+    st.rerun()
 
 
 for message in history.messages:
@@ -60,11 +72,20 @@ document = loader.load()
 
 text_splitter = RecursiveCharacterTextSplitter(chunk_size = 500, chunk_overlap = 50)
 chunks = text_splitter.split_documents(documents=document)
-print(chunks[10])
 
 embedding = HuggingFaceEmbeddings(
     model_name = embedding_model
 )
+
+vector_store = Chroma.from_documents(
+    embedding=embedding, 
+    documents=chunks
+)
+
+retriever = vector_store.as_retriever(
+    search_kwargs = {"k":3}
+)
+
 
 input = st.chat_input("input")
 
@@ -75,9 +96,18 @@ if input:
 
     st.chat_message('user').write(input)
 
+    relevant_docs = retriever.invoke(input)
+
+    content_from_docs = "/n/n".join(
+        docs.page_content for docs in relevant_docs 
+    )
+
+    print(content_from_docs)
+
     with st.chat_message('assistant'):
         response = st.write_stream(
             chain.stream({
+                "context":content_from_docs,
                 "message":history.messages
             })
         )
