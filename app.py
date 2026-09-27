@@ -79,14 +79,17 @@ def get_retriever():
         model_name = embedding_model
     )
 
-    vector_store = Chroma.from_documents(
-        embedding=embedding, 
-        documents=chunks
+    vector_store = Chroma(
+        collection_name="Attention",
+        embedding_function= embedding,
+        persist_directory="./chromadb"
     )
+    if vector_store.get()["ids"] == []:
+        vector_store.add_documents(chunks)
 
-    return vector_store.as_retriever(search_kwargs={"k": 3})
+    return vector_store
 
-retriever = get_retriever()
+vector_store  = get_retriever()
 
 
 input = st.chat_input("input")
@@ -98,22 +101,48 @@ if input:
 
     st.chat_message('user').write(input)
 
-    relevant_docs = retriever.invoke(input)
+    results = vector_store.similarity_search_with_score(
+        input,
+        k=5
+    )
 
-    content_from_docs = "\n\n".join(
-        doc.page_content for doc in relevant_docs
-    )   
+    threshold = 1.5
 
-    print(content_from_docs)
+    relevant_docs = [
+        doc
+        for doc, score in results
+        if score <= threshold
+    ]
 
-    with st.chat_message('assistant'):
-        response = st.write_stream(
-            chain.stream({
-                "context": content_from_docs,
-                "message": history.messages
-            })
+    for doc, score in results:
+        print("Score:", score)
+        print("Content:", doc.page_content[:200])
+        print("----------------")
+
+    if not relevant_docs:
+
+        response  = (
+            "I could not find relevant information in the provided document."
         )
-    
+
+        with st.chat_message("assistant"):
+            st.write(response)
+
+    else:
+        content_from_docs = "\n\n".join(
+                doc.page_content for doc in relevant_docs
+            )   
+        
+        print(content_from_docs)
+        
+        with st.chat_message('assistant'):
+            response = st.write_stream(
+                    chain.stream({
+                        "context": content_from_docs,
+                        "message": history.messages
+                    })
+                )
+            
     ai_message = AIMessage(content=response)
     history.add_message(ai_message)
 
