@@ -2,18 +2,22 @@ import os
 
 import streamlit as st
 from dotenv import load_dotenv
-from langchain_core.chat_history import InMemoryChatMessageHistory
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
 from langchain_redis import RedisChatMessageHistory
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
 
 load_dotenv()
 
 groq_api_key = os.getenv("GROQ_API_KEY")
+groq_model = os.getenv("GROQ_MODEL")
+embedding_model = os.getenv("EMBEDDING_MODEL")
 
-model = ChatGroq(model='openai/gpt-oss-20b', temperature=0.7, api_key=groq_api_key)
+model = ChatGroq(model=groq_model, temperature=0.7, api_key=groq_api_key)
 
 st.title("GEX")
 
@@ -49,7 +53,18 @@ for message in history.messages:
 
     if isinstance(message, AIMessage):
         st.chat_message('assistant').write(message.content)
-    
+
+
+loader = PyPDFLoader('resources/pdfs/attention.pdf')
+document = loader.load()
+
+text_splitter = RecursiveCharacterTextSplitter(chunk_size = 500, chunk_overlap = 50)
+chunks = text_splitter.split_documents(documents=document)
+print(chunks[10])
+
+embedding = HuggingFaceEmbeddings(
+    model_name = embedding_model
+)
 
 input = st.chat_input("input")
 
