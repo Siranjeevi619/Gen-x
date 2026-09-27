@@ -25,19 +25,28 @@ st.title("GEX")
 isclear = st.button("clear state")    
 
 prompt = ChatPromptTemplate.from_messages([
-    ("system",
-    """You are a helpful programming tutor named Gex.
+    (
+        "system",
+        """You are a helpful programming tutor named Gex.
         Explain technical concepts simply and give examples.
 
-        Use the provided context to answer questions about the document.
+        Use the provided context to answer questions.
 
-        If the answer cannot be found in the context, say that you
-        could not find the answer in the provided document.
+        Each context section contains a source and page number.
+
+        If the answer is found in the context, explain the answer
+        and mention the relevant page number.
+
+        If the answer cannot be found in the context, say:
+        "I could not find the answer in the provided document."
+
+        Do not make up information.
 
         Context:
         {context}
-        """),
-    ("placeholder","{message}")
+        """
+    ),
+    ("placeholder", "{message}")
 ])
 
 parser = StrOutputParser()
@@ -72,7 +81,11 @@ def get_retriever():
     loader = PyPDFLoader('resources/pdfs/attention.pdf')
     document = loader.load()
 
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+    text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000, 
+            chunk_overlap=50,
+            separators=["\n\n", "\n", " ", ""])
+    
     chunks = text_splitter.split_documents(documents=document)
 
     embedding = HuggingFaceEmbeddings(
@@ -130,8 +143,11 @@ if input:
 
     else:
         content_from_docs = "\n\n".join(
-                doc.page_content for doc in relevant_docs
-            )   
+            f"Source: {doc.metadata.get('source')}\n"
+            f"Page: {doc.metadata.get('page', 0) + 1}\n"
+            f"Content: {doc.page_content}"
+            for doc in relevant_docs
+        )
         
         print(content_from_docs)
         
@@ -145,8 +161,3 @@ if input:
             
     ai_message = AIMessage(content=response)
     history.add_message(ai_message)
-
-
-
-
-
